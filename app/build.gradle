@@ -1,24 +1,42 @@
 plugins {
-  id "com.android.application"
+    id "com.android.application"
 }
 
 android {
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
-    ndkVersion project.properties.ndkVersion
+    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
 
     dependencies {
-        implementation "androidx.annotation:annotation:1.1.0"
-        implementation "androidx.viewpager:viewpager:1.0.0"
+        implementation "androidx.annotation:annotation:1.2.0"
+        implementation "androidx.core:core:1.6.0-rc01"
         implementation "androidx.drawerlayout:drawerlayout:1.1.1"
+        implementation "androidx.preference:preference:1.1.1"
+        implementation "androidx.viewpager:viewpager:1.0.0"
+        implementation "com.google.guava:guava:24.1-jre"
+        implementation "io.noties.markwon:core:$markwonVersion"
+        implementation "io.noties.markwon:ext-strikethrough:$markwonVersion"
+        implementation "io.noties.markwon:linkify:$markwonVersion"
+        implementation "io.noties.markwon:recycler:$markwonVersion"
+
         implementation project(":terminal-view")
+        implementation project(":termux-shared")
     }
 
     defaultConfig {
         applicationId "com.termux"
         minSdkVersion project.properties.minSdkVersion.toInteger()
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
-        versionCode 104
-        versionName "0.104"
+        versionCode 117
+        versionName "0.117"
+
+        manifestPlaceholders.TERMUX_PACKAGE_NAME = "com.termux"
+        manifestPlaceholders.TERMUX_APP_NAME = "Termux"
+        manifestPlaceholders.TERMUX_API_APP_NAME = "Termux:API"
+        manifestPlaceholders.TERMUX_BOOT_APP_NAME = "Termux:Boot"
+        manifestPlaceholders.TERMUX_FLOAT_APP_NAME = "Termux:Float"
+        manifestPlaceholders.TERMUX_STYLING_APP_NAME = "Termux:Styling"
+        manifestPlaceholders.TERMUX_TASKER_APP_NAME = "Termux:Tasker"
+        manifestPlaceholders.TERMUX_WIDGET_APP_NAME = "Termux:Widget"
 
         externalNativeBuild {
             ndkBuild {
@@ -26,10 +44,14 @@ android {
             }
         }
 
-        ndk {
-            abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+        splits {
+            abi {
+                enable gradle.startParameter.taskNames.any { it.contains("Debug") }
+                reset ()
+                include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+                universalApk true
+            }
         }
-
     }
 
     signingConfigs {
@@ -73,20 +95,37 @@ android {
             includeAndroidResources = true
         }
     }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            if (variant.buildType.name == "debug") {
+                def abi = output.getFilter(com.android.build.OutputFile.ABI)
+                def releaseTag = System.getenv("RELEASE_TAG")
+                outputFileName = new File("termux-app-" + (abi ? abi : "universal") + (releaseTag ? "-" + releaseTag : "") + "-debug.apk")
+            }
+        }
+    }
+
 }
 
 dependencies {
-    testImplementation 'junit:junit:4.13.1'
-    testImplementation 'org.robolectric:robolectric:4.4'
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.robolectric:robolectric:4.4"
 }
 
 task versionName {
-  doLast {
-    print android.defaultConfig.versionName
-  }
+    doLast {
+        print android.defaultConfig.versionName
+    }
 }
 
-def downloadBootstrap(String arch, String expectedChecksum, int version) {
+def downloadBootstrap(String arch, String expectedChecksum, String version) {
     def digest = java.security.MessageDigest.getInstance("SHA-256")
 
     def localUrl = "src/main/cpp/bootstrap-" + arch + ".zip"
@@ -108,7 +147,7 @@ def downloadBootstrap(String arch, String expectedChecksum, int version) {
         }
     }
 
-    def remoteUrl = "https://bintray.com/termux/bootstrap/download_file?file_path=bootstrap-" + arch + "-v" + version + ".zip"
+    def remoteUrl = "https://github.com/termux/termux-packages/releases/download/bootstrap-" + version + "/bootstrap-" + arch + ".zip"
     logger.quiet("Downloading " + remoteUrl + " ...")
 
     file.parentFile.mkdirs()
@@ -135,18 +174,18 @@ clean {
     }
 }
 
-task downloadBootstraps(){
+task downloadBootstraps() {
     doLast {
-        def version = 34
-        downloadBootstrap("aarch64", "7f56e8ee5573a8351925ff4010c6dea240cd56194ba0b9a686c3d8289859a05", version)
-        downloadBootstrap("arm",     "fa41377fb07cac2e4c15f32f3e7ea8116d60efadc1261176acb42646a71637f0", version)
-        downloadBootstrap("i686",    "61dcae560e706f808e524b8c3b234c47ea0e2bf6c6b0d5edebe53e6fdb956fe1", version)
-        downloadBootstrap("x86_64",  "1b616a4d591809874a06b06f309441320a0b9781e8ef5c148123530303b2533d", version)
+        def version = "2021.06.30-r1"
+        downloadBootstrap("aarch64", "ce56ce9a4e8845bd1d35cc2695bbdd636c72625ee10ce21c9b98ab38ebbee5ab", version)
+        downloadBootstrap("arm",     "537e81951c7d3d3f3def9ce6778e1032457488e21edb2c037a1e0e680c39e747", version)
+        downloadBootstrap("i686",    "3c2ca858c0225671c00c44ac182e31819ffa93ec624e95e02824e7d6d30ca1b4", version)
+        downloadBootstrap("x86_64",  "93c50d36b45bca42bb014395e8e184e5b540adcad5d4e215f7e64ebf0d655d2b", version)
     }
 }
 
 afterEvaluate {
-  android.applicationVariants.all { variant ->
-    variant.javaCompileProvider.get().dependsOn(downloadBootstraps)
-  }
+    android.applicationVariants.all { variant ->
+        variant.javaCompileProvider.get().dependsOn(downloadBootstraps)
+    }
 }

@@ -37,9 +37,13 @@ public abstract class TerminalTestCase extends TestCase {
 		}
 
 		@Override
-		public void clipboardText(String text) {
+		public void onCopyTextToClipboard(String text) {
 			clipboardPuts.add(text);
 		}
+
+        @Override
+        public void onPasteTextFromClipboard() {
+        }
 
 		@Override
 		public void onBell() {
@@ -103,7 +107,8 @@ public abstract class TerminalTestCase extends TestCase {
 	}
 
 	protected TerminalTestCase withTerminalSized(int columns, int rows) {
-		mTerminal = new TerminalEmulator(mOutput, columns, rows, rows * 2);
+	    // The tests aren't currently using the client, so a null client will suffice, a dummy client should be implemented if needed
+		mTerminal = new TerminalEmulator(mOutput, columns, rows, rows * 2, null);
 		return this;
 	}
 
